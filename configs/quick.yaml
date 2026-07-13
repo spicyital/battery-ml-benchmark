@@ -1,0 +1,29 @@
+simulation:
+  seed: 42
+  n_cells: 4
+  cycles_per_cell: 6
+  samples_per_cycle: 36
+  sample_interval_s: 10
+  noise_std: 0.01
+  temperature_min_c: 15
+  temperature_max_c: 35
+  degradation_rate: 0.006
+  resistance_growth: 0.01
+split:
+  strategy: held_out_cell
+  validation_fraction: 0.25
+  test_fraction: 0.25
+  seed: 42
+output_dir: results
+window_length: 8
+lags: 2
+rolling_window: 4
+models: [ridge, random_forest, hist_gradient_boosting, mlp, narx, coulomb_counting, ocv_lookup, ekf]
+seeds: [42]
+epochs: 12
+batch_size: 32
+patience: 3
+model_params:
+  random_forest: {n_estimators: 30, max_depth: 8}
+  mlp: {hidden_layer_sizes: [24], max_iter: 150}
+  narx: {input_delays: 2, feedback_delays: 2, hidden_layers: [16], max_iter: 120}

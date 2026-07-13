@@ -1,0 +1,23 @@
+simulation:
+  seed: 42
+  n_cells: 8
+  cycles_per_cell: 20
+  samples_per_cycle: 120
+  degradation_rate: 0.004
+  resistance_growth: 0.006
+split:
+  strategy: held_out_cell
+  validation_fraction: 0.2
+  test_fraction: 0.2
+output_dir: results
+window_length: 24
+lags: 5
+rolling_window: 12
+models: [ridge, random_forest, hist_gradient_boosting, mlp, narx, temporal_cnn, gru, coulomb_counting, ocv_lookup, ekf]
+seeds: [11, 42, 73]
+epochs: 40
+batch_size: 64
+patience: 7
+model_params:
+  temporal_cnn: {channels: 16}
+  gru: {hidden_size: 16}
