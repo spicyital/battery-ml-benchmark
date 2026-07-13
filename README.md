@@ -108,10 +108,3 @@ YAML configurations record simulator parameters, split strategy, seeds, features
 
 Intended for ML-method comparison, time-series evaluation practice, and portfolio demonstration. It is not a battery-management-system controller, safety-certified estimator, warranty tool, or substitute for validation on licensed representative measurements. The synthetic-to-real gap, calibration, uncertainty, pack-level effects, and sensor-fault behavior remain open work.
 
-## Privacy and provenance
-
-No WRepo, Waseda, employer, student, OPMobility, Mitsubishi Fuso, private repository, credential, personal, proprietary, or unpublished research data is accessed or included. The public-data adapter requires documented source and license metadata before local loading.
-
-## Resume-ready summary
-
-Developed a reproducible machine-learning benchmark for battery SOC and SOH estimation, comparing NARX, gradient boosting, MLP, temporal CNN, and GRU models against coulomb-counting and Extended Kalman Filter baselines. Implemented leakage-resistant time-series evaluation, held-out-cell testing, robustness analysis, automated reporting, testing, and continuous integration.
