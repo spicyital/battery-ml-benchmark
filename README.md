@@ -132,8 +132,3 @@ YAML configurations record simulator parameters, split strategy, seeds, features
 
 Intended for ML-method comparison, time-series evaluation practice, and portfolio demonstration. It is not a battery-management-system controller, safety-certified estimator, warranty tool, or substitute for validation on licensed representative measurements. The synthetic-to-real gap, calibration, uncertainty, pack-level effects, and sensor-fault behavior remain open work.
 
-## Privacy and provenance
-
-This public benchmark uses generated synthetic data only. It contains no WRepo, student, employer, proprietary university, credential, personal, or unpublished research data. Public-data adapters require documented source and license metadata before use.
-
-A résumé-ready project summary is available in [docs/resume-summary.md](docs/resume-summary.md).
