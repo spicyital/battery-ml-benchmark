@@ -15,10 +15,10 @@ __pycache__/
 *.swo
 Thumbs.db
 Desktop.ini
-results/*.pt
-results/*.joblib
-results/*.history.json
-results/prediction_diagnostics.csv
+results/**/*.pt
+results/**/*.joblib
+results/**/*.history.json
+results/**/prediction_diagnostics.csv
 data/synthetic/*.csv
 data/public/*
 !data/public/README.md

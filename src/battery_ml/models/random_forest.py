@@ -8,10 +8,18 @@ from sklearn.ensemble import RandomForestRegressor
 
 class RandomForestEstimator:
     def __init__(
-        self, n_estimators: int = 100, max_depth: int | None = None, random_state: int = 42
+        self,
+        n_estimators: int = 100,
+        max_depth: int | None = None,
+        min_samples_leaf: int = 1,
+        random_state: int = 42,
     ) -> None:
         self.model = RandomForestRegressor(
-            n_estimators=n_estimators, max_depth=max_depth, random_state=random_state, n_jobs=1
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_leaf=min_samples_leaf,
+            random_state=random_state,
+            n_jobs=1,
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> RandomForestEstimator:

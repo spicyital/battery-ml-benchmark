@@ -29,12 +29,18 @@ class SequenceRegressor:
     """Shared fit/predict wrapper; concrete classes supply a causal network."""
 
     def __init__(
-        self, epochs: int = 16, batch_size: int = 32, patience: int = 4, random_state: int = 42
+        self,
+        epochs: int = 16,
+        batch_size: int = 32,
+        patience: int = 4,
+        random_state: int = 42,
+        learning_rate: float = 0.003,
     ) -> None:
         self.epochs = epochs
         self.batch_size = batch_size
         self.patience = patience
         self.random_state = random_state
+        self.learning_rate = learning_rate
         self.network: nn.Module | None = None
         self.training_history: list[dict[str, float]] = []
 
@@ -61,7 +67,7 @@ class SequenceRegressor:
         validation_loader = DataLoader(
             WindowDataset(X_validation, y_validation), batch_size=self.batch_size, shuffle=False
         )
-        optimizer = torch.optim.Adam(self.network.parameters(), lr=0.003)
+        optimizer = torch.optim.Adam(self.network.parameters(), lr=self.learning_rate)
         loss_fn = nn.MSELoss()
         destination = Path(checkpoint_path)
         destination.parent.mkdir(parents=True, exist_ok=True)

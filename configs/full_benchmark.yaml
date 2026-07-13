@@ -1,0 +1,35 @@
+# CPU-friendly release benchmark. It is intentionally separate from the CI quick run.
+full_benchmark: true
+simulation:
+  seed: 42
+  n_cells: 6
+  cycles_per_cell: 10
+  samples_per_cycle: 60
+  sample_interval_s: 10
+  noise_std: 0.008
+  temperature_min_c: 15
+  temperature_max_c: 35
+  degradation_rate: 0.005
+  resistance_growth: 0.006
+split:
+  strategy: held_out_cell
+  validation_fraction: 0.20
+  test_fraction: 0.20
+  seed: 42
+# Held-out cells and later held-out cycles are both locked test protocols.
+split_strategies: [held_out_cell, chronological]
+output_dir: results/full
+window_length: 12
+lags: 4
+rolling_window: 8
+models: [ridge, random_forest, hist_gradient_boosting, mlp, narx, temporal_cnn, gru, coulomb_counting, ocv_lookup, ekf]
+seeds: [11, 42, 73]
+epochs: 12
+batch_size: 64
+patience: 3
+model_params:
+  random_forest: {n_estimators: 60, max_depth: 10, min_samples_leaf: 2}
+  mlp: {hidden_layer_sizes: [32], max_iter: 250, alpha: 0.0005}
+  narx: {input_delays: 4, feedback_delays: 3, hidden_layers: [24, 12], max_iter: 180}
+  temporal_cnn: {channels: 12}
+  gru: {hidden_size: 12}

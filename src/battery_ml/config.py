@@ -57,6 +57,9 @@ class ExperimentConfig:
     batch_size: int = 32
     patience: int = 4
     model_params: dict[str, Any] = field(default_factory=dict)
+    # A release benchmark may evaluate more than one leakage-safe partition protocol.
+    split_strategies: tuple[str, ...] = ()
+    full_benchmark: bool = False
 
 
 def load_config(path: str | Path) -> ExperimentConfig:
@@ -70,4 +73,6 @@ def load_config(path: str | Path) -> ExperimentConfig:
         top_level["models"] = tuple(top_level["models"])
     if "seeds" in top_level:
         top_level["seeds"] = tuple(top_level["seeds"])
+    if "split_strategies" in top_level:
+        top_level["split_strategies"] = tuple(top_level["split_strategies"])
     return ExperimentConfig(simulation=simulation, split=split, **top_level)

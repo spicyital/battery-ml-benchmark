@@ -11,11 +11,13 @@ class MLPEstimator:
         self,
         hidden_layer_sizes: tuple[int, ...] = (32,),
         max_iter: int = 300,
+        alpha: float = 0.0001,
         random_state: int = 42,
     ) -> None:
         self.model = MLPRegressor(
             hidden_layer_sizes=hidden_layer_sizes,
             max_iter=max_iter,
+            alpha=alpha,
             early_stopping=False,
             random_state=random_state,
             learning_rate_init=0.003,

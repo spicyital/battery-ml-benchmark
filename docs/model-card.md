@@ -13,7 +13,7 @@ Synthetic multicell, multicycle trajectories generated locally.
 Cell- or cycle-held-out partitions, causal features, training-only transforms, and robustness scenarios.
 
 ## Performance
-See the generated SOC/SOH metric CSVs for locked synthetic-test metrics and runtime.
+Quick synthetic metrics are in `results/`. The Version 1 full synthetic benchmark records three-seed held-out-cell and chronological held-out-cycle results, robustness metrics, and runtimes in `results/full/`. These are methodology comparisons, not real-cell claims.
 
 ## Limitations and safety considerations
 A synthetic-to-real domain gap remains; validate against licensed representative measurements, calibration, uncertainty analysis, and safety engineering before deployment.

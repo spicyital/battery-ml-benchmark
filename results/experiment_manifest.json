@@ -60,9 +60,11 @@
         ],
         "max_iter": 120
       }
-    }
+    },
+    "split_strategies": [],
+    "full_benchmark": false
   },
-  "git_commit_sha": null,
+  "git_commit_sha": "a4752dea71e4f7e5ac93d8176eacd78878a30a62",
   "data_provenance": "synthetic data generated inside this project",
   "split_strategy": "held_out_cell",
   "artifacts": [

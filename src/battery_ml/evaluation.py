@@ -27,6 +27,7 @@ def evaluate_predictions(
             "task": task,
             "model": model,
             "seed": seed,
+            "test_sample_count": int(len(y_true)),
             "training_seconds": train_seconds,
             "inference_seconds": inference_seconds,
             "runtime_seconds": train_seconds + inference_seconds,

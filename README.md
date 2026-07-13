@@ -12,7 +12,7 @@ An ML-first, CPU-friendly benchmark for battery state-of-charge (SOC) time-serie
 | --- | --- | --- |
 | ML included in the quick benchmark | Ridge, Random Forest, Histogram Gradient Boosting, MLP, NARX | Included in committed synthetic quick results |
 | Engineering comparison baselines | Coulomb counting, OCV lookup, one-state EKF | Included in committed synthetic quick results |
-| Sequence ML | Causal 1D CNN, GRU | Supported by `configs/soc_experiment.yaml`; implemented and tested, but not represented in committed quick results |
+| Sequence ML | Causal 1D CNN, GRU | Included in the Version 1 full benchmark; excluded from quick CI results |
 
 CNN and GRU are deliberately excluded from the fast CI/quick configuration. Do not interpret the committed metric tables as CNN/GRU benchmark results.
 
@@ -60,12 +60,36 @@ python scripts/evaluate_models.py --config configs/quick.yaml
 python scripts/generate_report.py --results results
 ```
 
-`quick.yaml` runs only the lightweight models and baselines listed above. Full CPU experiments are available through:
+`quick.yaml` runs only Ridge, Random Forest, Histogram Gradient Boosting, MLP, NARX, coulomb counting, OCV lookup, and EKF. It remains the fast CI path. The Version 1 CPU release benchmark runs every SOC estimator, three seeds, two locked test protocols, and robustness conditions:
 
 ```bash
-python scripts/evaluate_models.py --config configs/soc_experiment.yaml
-python scripts/evaluate_models.py --config configs/soh_experiment.yaml
+python scripts/evaluate_models.py --config configs/full_benchmark.yaml
 ```
+
+The measured local run time was about **254 seconds** (4.2 minutes). `configs/soc_experiment.yaml` and `configs/soh_experiment.yaml` remain focused experiment templates.
+
+## Version 1 full benchmark
+
+All reported benchmark results use generated synthetic battery data and should not be interpreted as validated real-cell performance.
+
+The full release uses seeds 11, 42, and 73; held-out-cell and chronological held-out-cycle tests; validation-only neural checkpoint selection; and seven controlled robustness conditions. The table shows the held-out-cell aggregate (mean ± standard deviation across seeds), selected from committed `results/full` CSVs.
+
+| Task | Model | RMSE mean ± std | R² mean |
+| --- | --- | ---: | ---: |
+| SOC | Ridge | 0.005063 ± 0.000000 | 0.977374 |
+| SOC | NARX | 0.012648 ± 0.001232 | 0.857906 |
+| SOC | EKF | 0.021880 ± 0.000000 | 0.577441 |
+| SOC | GRU | 0.022082 ± 0.006303 | 0.431057 |
+| SOC | Temporal CNN | 0.037898 ± 0.009790 | -0.660160 |
+| SOC | Coulomb counting | 0.123930 ± 0.000000 | -12.556638 |
+| SOH | Random Forest | 0.001854 ± 0.000146 | 0.992044 |
+| SOH | Ridge | 0.002544 ± 0.000000 | 0.985074 |
+
+Ridge was the strongest held-out-cell SOC estimator in this synthetic run; Random Forest was the strongest SOH estimator. The EKF remained competitive on SOC, while the compact neural models did not materially improve on the simpler methods at this training budget. See the [full benchmark interpretation](docs/full-benchmark-results.md), [aggregate metrics](results/full/soc_metrics_summary.csv), and [robustness metrics](results/full/robustness_metrics.csv) for the complete record.
+
+![Full SOC RMSE comparison](results/full/plots/soc_rmse_comparison.png)
+
+![Full robustness comparison](results/full/plots/robustness_comparison.png)
 
 ## Current committed quick results
 
@@ -102,9 +126,14 @@ ruff check .
 pytest -q
 ```
 
-YAML configurations record simulator parameters, split strategy, seeds, features, enabled models, and training limits. The manifest records the configuration, data provenance, generated artifacts, and Git commit SHA when available.
+YAML configurations record simulator parameters, split strategy, seeds, features, enabled models, and training limits. The manifest records the configuration, data provenance, generated artifacts, and Git commit SHA when available. Full CSVs retain per-seed metrics, test sample counts, hyperparameters, and training/inference runtimes.
 
 ## Intended use and limitations
 
 Intended for ML-method comparison, time-series evaluation practice, and portfolio demonstration. It is not a battery-management-system controller, safety-certified estimator, warranty tool, or substitute for validation on licensed representative measurements. The synthetic-to-real gap, calibration, uncertainty, pack-level effects, and sensor-fault behavior remain open work.
 
+## Privacy and provenance
+
+This public benchmark uses generated synthetic data only. It contains no WRepo, student, employer, proprietary university, credential, personal, or unpublished research data. Public-data adapters require documented source and license metadata before use.
+
+A résumé-ready project summary is available in [docs/resume-summary.md](docs/resume-summary.md).

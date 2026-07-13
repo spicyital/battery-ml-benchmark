@@ -220,8 +220,8 @@ def write_reports(
         "All values below are generated from synthetic data; they are not real-battery "
         "accuracy claims. The committed quick benchmark includes Ridge, Random Forest, "
         "Histogram Gradient Boosting, MLP, NARX, coulomb counting, OCV lookup, and EKF. "
-        "CNN and GRU are supported in the full SOC configuration but are not represented "
-        "in these committed quick results.\n\n"
+        "CNN and GRU are represented in the separate Version 1 full-release artifacts "
+        "under `results/full/`, but not in these committed quick results.\n\n"
         f"Lowest quick SOC RMSE: **{best_soc}**. Lowest quick SOH RMSE: **{best_soh}**.\n\n"
         "## SOC quick benchmark\n\n"
         f"{metric_table(soc_metrics)}\n\n"
@@ -238,8 +238,10 @@ def write_reports(
         "## Training data\nSynthetic multicell, multicycle trajectories generated locally.\n\n"
         "## Evaluation procedure\nCell- or cycle-held-out partitions, causal features, "
         "training-only transforms, and robustness scenarios.\n\n"
-        "## Performance\nSee the generated SOC/SOH metric CSVs for locked synthetic-test "
-        "metrics and runtime.\n\n"
+        "## Performance\nQuick synthetic metrics are in `results/`. The Version 1 full "
+        "synthetic benchmark records three-seed held-out-cell and chronological held-out-cycle "
+        "results, robustness metrics, and runtimes in `results/full/`. These are methodology "
+        "comparisons, not real-cell claims.\n\n"
         "## Limitations and safety considerations\nA synthetic-to-real domain gap remains; "
         "validate against licensed representative measurements, calibration, uncertainty "
         "analysis, and safety engineering before deployment.\n\n"
@@ -247,3 +249,166 @@ def write_reports(
         "and sensor effects; results cannot be used as real-world accuracy claims.\n",
         encoding="utf-8",
     )
+
+
+def _bar_plot(summary: pd.DataFrame, metric: str, path: Path, title: str, ylabel: str) -> None:
+    if summary.empty or metric not in summary:
+        return
+    values = summary.sort_values(metric)
+    labels = values["model"] + "\n" + values["split_strategy"]
+    plt.figure(figsize=(10, 4))
+    plt.bar(labels, values[metric])
+    plt.title(title)
+    plt.xlabel("model and locked-test protocol")
+    plt.ylabel(ylabel)
+    plt.xticks(rotation=35, ha="right")
+    plt.tight_layout()
+    plt.savefig(path, dpi=140)
+    plt.close()
+
+
+def _representative_plots(diagnostics: pd.DataFrame, output_dir: Path) -> None:
+    if diagnostics.empty:
+        return
+    soc = diagnostics.loc[diagnostics.task == "soc"]
+    if not soc.empty:
+        preferred = "gru" if "gru" in set(soc.model) else str(soc.model.iloc[0])
+        selected = soc.loc[soc.model == preferred].iloc[:300]
+        plt.figure(figsize=(9, 4))
+        plt.plot(selected.index, selected.y_true, label="true SOC")
+        plt.plot(selected.index, selected.y_pred, label="predicted SOC")
+        plt.title(f"Representative true versus predicted SOC ({preferred})")
+        plt.xlabel("locked-test observation")
+        plt.ylabel("SOC")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(output_dir / "representative_soc_true_vs_predicted.png", dpi=140)
+        plt.close()
+        plt.figure(figsize=(9, 4))
+        plt.plot(selected.index, selected.y_pred - selected.y_true)
+        plt.title(f"Representative SOC error over time ({preferred})")
+        plt.xlabel("locked-test observation")
+        plt.ylabel("prediction error")
+        plt.tight_layout()
+        plt.savefig(output_dir / "representative_soc_error_over_time.png", dpi=140)
+        plt.close()
+        per_cell = (
+            soc.groupby(["model", "cell_id"], as_index=False)["absolute_error"]
+            .mean()
+            .rename(columns={"absolute_error": "mae"})
+        )
+        plt.figure(figsize=(10, 4))
+        for model, group in per_cell.groupby("model"):
+            plt.plot(group["cell_id"], group["mae"], marker="o", label=str(model))
+        plt.title("Per-cell SOC performance")
+        plt.xlabel("cell")
+        plt.ylabel("mean absolute error")
+        plt.legend(ncol=2)
+        plt.tight_layout()
+        plt.savefig(output_dir / "per_cell_performance.png", dpi=140)
+        plt.close()
+    soh = diagnostics.loc[diagnostics.task == "soh"]
+    if not soh.empty:
+        preferred = str(soh.model.iloc[0])
+        selected = soh.loc[soh.model == preferred]
+        plt.figure(figsize=(9, 4))
+        plt.plot(selected.cycle_id, selected.y_true, marker="o", label="true SOH")
+        plt.plot(selected.cycle_id, selected.y_pred, marker="x", label="predicted SOH")
+        plt.title(f"Representative true versus predicted SOH ({preferred})")
+        plt.xlabel("cycle")
+        plt.ylabel("SOH")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(output_dir / "representative_soh_true_vs_predicted.png", dpi=140)
+        plt.close()
+
+
+def _neural_history_plots(directory: Path, output_dir: Path) -> None:
+    # Keep one representative curve per neural architecture in the public artifact set.
+    selected: dict[str, Path] = {}
+    for path in sorted(directory.glob("*.history.json")):
+        model = "gru" if path.name.startswith("gru_") else "temporal_cnn"
+        selected.setdefault(model, path)
+    for path in selected.values():
+        history = pd.DataFrame(json.loads(path.read_text(encoding="utf-8")))
+        if history.empty:
+            continue
+        plt.figure(figsize=(8, 4))
+        plt.plot(history.epoch, history.training_loss, label="training loss")
+        plt.plot(history.epoch, history.validation_loss, label="validation loss")
+        plt.title(f"Neural training curve ({path.stem.replace('.history', '')})")
+        plt.xlabel("epoch")
+        plt.ylabel("MSE")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(output_dir / f"{path.stem}_loss.png", dpi=140)
+        plt.close()
+
+
+def write_full_release_artifacts(
+    output_dir: str | Path,
+    soc_metrics: pd.DataFrame,
+    soh_metrics: pd.DataFrame,
+    diagnostics: pd.DataFrame,
+    manifest: dict[str, Any],
+    robustness_metrics: pd.DataFrame | None = None,
+) -> None:
+    """Write compact, auditable V1 release summaries without raw trajectories."""
+    from .experiment import _runtime_rows, summarize_seed_metrics
+
+    directory = Path(output_dir)
+    plots = directory / "plots"
+    directory.mkdir(parents=True, exist_ok=True)
+    plots.mkdir(parents=True, exist_ok=True)
+    robustness = pd.DataFrame() if robustness_metrics is None else robustness_metrics
+    soc_summary = summarize_seed_metrics(soc_metrics)
+    soh_summary = summarize_seed_metrics(soh_metrics)
+    soc_metrics.to_csv(directory / "soc_metrics_by_seed.csv", index=False)
+    soc_summary.to_csv(directory / "soc_metrics_summary.csv", index=False)
+    soh_metrics.to_csv(directory / "soh_metrics_by_seed.csv", index=False)
+    soh_summary.to_csv(directory / "soh_metrics_summary.csv", index=False)
+    robustness.to_csv(directory / "robustness_metrics.csv", index=False)
+    pd.concat([_runtime_rows(soc_metrics), _runtime_rows(soh_metrics)], ignore_index=True).to_csv(
+        directory / "runtime_metrics.csv", index=False
+    )
+    with (directory / "experiment_manifest.json").open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, default=str)
+    _bar_plot(
+        soc_summary, "rmse_mean", plots / "soc_rmse_comparison.png", "SOC RMSE comparison", "RMSE"
+    )
+    _bar_plot(soc_summary, "r2_mean", plots / "soc_r2_comparison.png", "SOC R2 comparison", "R2")
+    _bar_plot(
+        soh_summary, "rmse_mean", plots / "soh_rmse_comparison.png", "SOH RMSE comparison", "RMSE"
+    )
+    _bar_plot(soh_summary, "r2_mean", plots / "soh_r2_comparison.png", "SOH R2 comparison", "R2")
+    runtime = pd.concat([_runtime_rows(soc_metrics), _runtime_rows(soh_metrics)], ignore_index=True)
+    runtime_summary = summarize_seed_metrics(runtime)
+    _bar_plot(
+        runtime_summary,
+        "training_seconds_mean",
+        plots / "training_runtime_comparison.png",
+        "Training runtime comparison",
+        "seconds",
+    )
+    _bar_plot(
+        runtime_summary,
+        "inference_seconds_mean",
+        plots / "inference_runtime_comparison.png",
+        "Inference runtime comparison",
+        "seconds",
+    )
+    if not robustness.empty:
+        grouped = robustness.groupby(["scenario", "model"], as_index=False)["rmse"].mean()
+        plt.figure(figsize=(11, 4))
+        for model, group in grouped.groupby("model"):
+            plt.plot(group.scenario, group.rmse, marker="o", label=str(model))
+        plt.title("SOC robustness comparison (held-out cells)")
+        plt.xlabel("scenario")
+        plt.ylabel("mean RMSE across seeds")
+        plt.xticks(rotation=30, ha="right")
+        plt.legend(ncol=2)
+        plt.tight_layout()
+        plt.savefig(plots / "robustness_comparison.png", dpi=140)
+        plt.close()
+    _representative_plots(diagnostics, plots)
+    _neural_history_plots(directory, plots)

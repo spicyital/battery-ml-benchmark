@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import time
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -30,7 +31,7 @@ from .models.narx import NARXEstimator
 from .models.random_forest import RandomForestEstimator
 from .models.temporal_cnn import TemporalCNNEstimator
 from .preprocessing import TrainOnlyStandardizer
-from .reporting import write_reports
+from .reporting import write_full_release_artifacts, write_reports
 from .simulation import simulate_battery_data
 from .splits import SplitFrames, make_split
 from .windowing import make_windows
@@ -41,6 +42,18 @@ BASELINES: dict[str, Callable[[pd.DataFrame], np.ndarray]] = {
     "ekf": ekf_soc,
 }
 SYNTHETIC_PROVENANCE = "synthetic data generated inside this project"
+RELEASE_SOC_MODELS = (
+    "ridge",
+    "random_forest",
+    "hist_gradient_boosting",
+    "mlp",
+    "narx",
+    "temporal_cnn",
+    "gru",
+    "coulomb_counting",
+    "ocv_lookup",
+    "ekf",
+)
 
 
 def _model(name: str, params: dict[str, object], seed: int) -> object:
@@ -108,6 +121,7 @@ def run_soc_experiment(
                 sequence_parts = []
                 for part in (split.train, split.validation, split.test):
                     scaled = part.copy()
+                    scaled = scaled.astype({column: float for column in columns})
                     scaled.loc[:, columns] = scaler.transform(part[columns])
                     sequence_parts.append(
                         make_windows(scaled, columns, "soc", config.window_length)
@@ -120,7 +134,9 @@ def run_soc_experiment(
                 settings["random_state"] = seed
                 model = _model(name, {name: settings}, seed)
                 started = time.perf_counter()
-                checkpoint = Path(config.output_dir) / f"{name}_seed_{seed}.pt"
+                checkpoint = (
+                    Path(config.output_dir) / f"{name}_{config.split.strategy}_seed_{seed}.pt"
+                )
                 model.fit(  # type: ignore[union-attr]
                     train_window.X,
                     train_window.y,
@@ -163,6 +179,9 @@ def run_soc_experiment(
             )
             metric["data_provenance"] = SYNTHETIC_PROVENANCE
             metric["split_strategy"] = config.split.strategy
+            metric["hyperparameters"] = json.dumps(
+                {} if name in BASELINES else config.model_params.get(name, {}), sort_keys=True
+            )
             records.append(metric)
             diagnostic["task"] = "soc"
             diagnostic["model"] = name
@@ -210,6 +229,9 @@ def run_soh_experiment(
             )
             metric["data_provenance"] = SYNTHETIC_PROVENANCE
             metric["split_strategy"] = config.split.strategy
+            metric["hyperparameters"] = json.dumps(
+                config.model_params.get(name, {}), sort_keys=True
+            )
             records.append(metric)
             diagnostic["task"] = "soh"
             diagnostic["model"] = name
@@ -248,3 +270,172 @@ def run_full_benchmark(config: ExperimentConfig) -> tuple[pd.DataFrame, pd.DataF
         manifest,
     )
     return soc, soh
+
+
+def summarize_seed_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate locked-test metrics without hiding the per-seed source rows."""
+    if metrics.empty:
+        return pd.DataFrame()
+    group_columns = ["task", "model", "split_strategy"]
+    numeric = metrics.select_dtypes(include="number").columns.difference(["seed"])
+    grouped = metrics.groupby(group_columns, dropna=False)
+    mean = grouped[list(numeric)].mean().add_suffix("_mean")
+    std = grouped[list(numeric)].std(ddof=1).fillna(0.0).add_suffix("_std")
+    result = mean.join(std).reset_index()
+    result["seed_count"] = grouped["seed"].nunique().to_numpy()
+    result["data_provenance"] = SYNTHETIC_PROVENANCE
+    return result.sort_values(group_columns).reset_index(drop=True)
+
+
+def _runtime_rows(metrics: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "task",
+        "model",
+        "split_strategy",
+        "seed",
+        "training_seconds",
+        "inference_seconds",
+        "runtime_seconds",
+        "test_sample_count",
+        "data_provenance",
+    ]
+    return metrics.loc[:, [column for column in columns if column in metrics]].copy()
+
+
+def validate_full_artifacts(
+    directory: str | Path,
+    required_soc_models: set[str] | None = None,
+    required_seeds: set[int] | None = None,
+) -> None:
+    """Reject incomplete, non-finite, or internally inconsistent release artifacts."""
+    destination = Path(directory)
+    required = {
+        "soc_metrics_by_seed.csv",
+        "soc_metrics_summary.csv",
+        "soh_metrics_by_seed.csv",
+        "soh_metrics_summary.csv",
+        "robustness_metrics.csv",
+        "runtime_metrics.csv",
+        "experiment_manifest.json",
+    }
+    missing = sorted(name for name in required if not (destination / name).exists())
+    if missing:
+        raise ValueError(f"full benchmark is missing artifacts: {', '.join(missing)}")
+    soc = pd.read_csv(destination / "soc_metrics_by_seed.csv")
+    soh = pd.read_csv(destination / "soh_metrics_by_seed.csv")
+    soc_summary = pd.read_csv(destination / "soc_metrics_summary.csv")
+    soh_summary = pd.read_csv(destination / "soh_metrics_summary.csv")
+    robustness = pd.read_csv(destination / "robustness_metrics.csv")
+    runtime = pd.read_csv(destination / "runtime_metrics.csv")
+    if soc.empty or soh.empty:
+        raise ValueError("full benchmark metrics cannot be empty")
+    for label, frame in (("SOC", soc), ("SOH", soh)):
+        numeric = frame.select_dtypes(include="number")
+        if not np.isfinite(numeric.to_numpy(dtype=float)).all():
+            raise ValueError(f"{label} metrics contain non-finite values")
+    for label, summary in (("SOC", soc_summary), ("SOH", soh_summary)):
+        required_summary = {"model", "split_strategy", "rmse_mean", "rmse_std", "seed_count"}
+        if not required_summary.issubset(summary.columns):
+            raise ValueError(f"{label} summary does not match the release schema")
+        if not np.isfinite(summary.select_dtypes(include="number").to_numpy(dtype=float)).all():
+            raise ValueError(f"{label} summary contains non-finite values")
+    if robustness.empty or not {"scenario", "model", "seed", "rmse"}.issubset(robustness.columns):
+        raise ValueError("robustness results are missing required scenario/model rows")
+    if runtime.empty or not {"training_seconds", "inference_seconds"}.issubset(runtime.columns):
+        raise ValueError("runtime results are incomplete")
+    if required_soc_models and not required_soc_models.issubset(set(soc["model"])):
+        missing_models = sorted(required_soc_models - set(soc["model"]))
+        raise ValueError(f"full SOC results are missing models: {', '.join(missing_models)}")
+    if required_seeds:
+        for label, frame in (("SOC", soc), ("SOH", soh)):
+            observed = set(frame["seed"].astype(int))
+            if not required_seeds.issubset(observed):
+                raise ValueError(f"full {label} results are missing one or more requested seeds")
+    manifest = json.loads((destination / "experiment_manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("data_provenance") != SYNTHETIC_PROVENANCE:
+        raise ValueError("full benchmark manifest does not disclose synthetic provenance")
+
+
+def _release_robustness(config: ExperimentConfig) -> pd.DataFrame:
+    """Run controlled SOC shifts under the held-out-cell generalization protocol."""
+    scenarios = {
+        "nominal": {},
+        "increased_sensor_noise": {"noise_std": config.simulation.noise_std * 3},
+        "current_sensor_bias": {"current_bias_a": 0.08},
+        "voltage_sensor_bias": {"voltage_bias_v": 0.03},
+        "unseen_temperature_range": {"temperature_min_c": -5.0, "temperature_max_c": 8.0},
+        "unseen_degradation_rate": {"degradation_rate": config.simulation.degradation_rate * 2.5},
+        "held_out_load_profile": {"profile": "pulse"},
+    }
+    protocol = replace(config, split=replace(config.split, strategy="held_out_cell"))
+    records: list[pd.DataFrame] = []
+    for scenario, updates in scenarios.items():
+        scenario_config = replace(protocol, simulation=replace(protocol.simulation, **updates))
+        metrics, _ = run_soc_experiment(scenario_config)
+        metrics["scenario"] = scenario
+        records.append(metrics)
+    return pd.concat(records, ignore_index=True)
+
+
+def run_full_release_benchmark(config: ExperimentConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run the V1 three-seed release protocol and write compact aggregate artifacts.
+
+    The simulator runs once. Each model then sees the same fixed partitions per split
+    strategy; validation remains separate from the locked test partition.
+    """
+    if not config.full_benchmark:
+        raise ValueError("run_full_release_benchmark requires full_benchmark: true")
+    frame = simulate_battery_data(config.simulation)
+    strategies = config.split_strategies or (config.split.strategy,)
+    soc_records: list[pd.DataFrame] = []
+    soh_records: list[pd.DataFrame] = []
+    diagnostics: list[pd.DataFrame] = []
+    for strategy in strategies:
+        strategy_config = replace(config, split=replace(config.split, strategy=strategy))
+        soc, soc_diagnostics = run_soc_experiment(strategy_config, frame)
+        soh, soh_diagnostics = run_soh_experiment(strategy_config, frame)
+        soc_records.append(soc)
+        soh_records.append(soh)
+        diagnostics.extend([soc_diagnostics, soh_diagnostics])
+    soc_metrics = pd.concat(soc_records, ignore_index=True)
+    soh_metrics = pd.concat(soh_records, ignore_index=True)
+    robustness_metrics = _release_robustness(config)
+    manifest = {
+        "release": "1.0.0",
+        "configuration": asdict(config),
+        "git_commit_sha": _git_sha(),
+        "data_provenance": SYNTHETIC_PROVENANCE,
+        "partition_strategies": list(strategies),
+        "model_selection": (
+            "Validation partitions only; locked test metrics are never used for selection."
+        ),
+        "result_schema": {
+            "per_seed": "model, split_strategy, seed, test_sample_count, metrics, runtimes",
+            "summary": "mean and sample standard deviation grouped by model and split strategy",
+        },
+        "soc_models": list(config.models),
+        "soh_models": ["ridge", "random_forest", "hist_gradient_boosting", "mlp"],
+        "artifacts": [
+            "soc_metrics_by_seed.csv",
+            "soc_metrics_summary.csv",
+            "soh_metrics_by_seed.csv",
+            "soh_metrics_summary.csv",
+            "robustness_metrics.csv",
+            "runtime_metrics.csv",
+            "plots/",
+        ],
+    }
+    write_full_release_artifacts(
+        config.output_dir,
+        soc_metrics,
+        soh_metrics,
+        pd.concat(diagnostics, ignore_index=True),
+        manifest,
+        robustness_metrics,
+    )
+    validate_full_artifacts(
+        config.output_dir,
+        required_soc_models=set(RELEASE_SOC_MODELS),
+        required_seeds=set(config.seeds),
+    )
+    return soc_metrics, soh_metrics
