@@ -71,22 +71,22 @@ python scripts/evaluate_models.py --config configs/soh_experiment.yaml
 
 All figures and tables below are generated from synthetic data using `configs/quick.yaml`; they are methodology comparisons, not real-battery accuracy claims.
 
-| Task | Model | RMSE | MAE | R2 | Runtime (s) |
-| --- | --- | ---: | ---: | ---: | ---: |
-| SOC | Ridge | 0.010643 | 0.008990 | 0.694956 | 0.002918 |
-| SOC | Random Forest | 0.123091 | 0.112844 | -39.804726 | 0.123382 |
-| SOC | Histogram Gradient Boosting | 0.116671 | 0.106213 | -35.659184 | 0.773156 |
-| SOC | MLP | 0.106367 | 0.082255 | -29.469935 | 0.125274 |
-| SOC | NARX | 0.029382 | 0.025676 | -1.324953 | 0.182702 |
-| SOC | Coulomb counting | 0.150191 | 0.147377 | -59.749977 | 0.010747 |
-| SOC | OCV lookup | 0.025463 | 0.019725 | -0.746145 | 0.000057 |
-| SOC | EKF | 0.023860 | 0.018041 | -0.533235 | 0.014425 |
-| SOH | Ridge | 0.007497 | 0.006559 | 0.745378 | 0.001568 |
-| SOH | Random Forest | 0.008533 | 0.007967 | 0.670179 | 0.032474 |
-| SOH | Histogram Gradient Boosting | 0.015887 | 0.013475 | -0.143324 | 0.049268 |
-| SOH | MLP | 0.061842 | 0.040359 | -16.323479 | 0.020916 |
+| Task | Model | RMSE | MAE | R2 |
+| --- | --- | ---: | ---: | ---: |
+| SOC | Ridge | 0.010643 | 0.008990 | 0.694956 |
+| SOC | Random Forest | 0.123091 | 0.112844 | -39.804726 |
+| SOC | Histogram Gradient Boosting | 0.116671 | 0.106213 | -35.659184 |
+| SOC | MLP | 0.106367 | 0.082255 | -29.469935 |
+| SOC | NARX | 0.029382 | 0.025676 | -1.324953 |
+| SOC | Coulomb counting | 0.150191 | 0.147377 | -59.749977 |
+| SOC | OCV lookup | 0.025463 | 0.019725 | -0.746145 |
+| SOC | EKF | 0.023860 | 0.018041 | -0.533235 |
+| SOH | Ridge | 0.007497 | 0.006559 | 0.745378 |
+| SOH | Random Forest | 0.008533 | 0.007967 | 0.670179 |
+| SOH | Histogram Gradient Boosting | 0.015887 | 0.013475 | -0.143324 |
+| SOH | MLP | 0.061842 | 0.040359 | -16.323479 |
 
-Exact generated CSVs and the manifest are under [results/](results/).
+Exact generated CSVs, including run-specific runtime measurements, and the manifest are under [results/](results/).
 
 ![SOC true versus predicted](results/soc_true_vs_predicted.png)
 
